@@ -1,7 +1,10 @@
 const express = require('express')
 const cors = require('cors')
+
+// console.log(stripe)
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
+const stripe = require('stripe')(`${process.env.STRIPE_SECRET}`);
 const app = express()
 const port = process.env.port || 3000;
 
@@ -32,16 +35,23 @@ async function run() {
 
         // })
 
-        app.get('/parcels', async(req,res) => {
+        app.get('/parcels/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+            const result = await parcelCollections.findOne(query);
+            res.send(result)
+        })
+
+        app.get('/parcels', async (req, res) => {
             const query = {};
-            const {email} = req.query;
-            if(email) {
+            const { email } = req.query;
+            if (email) {
                 query.senderEmail = email
             }
 
-            const options = {sort : {createdAt: -1}}
+            const options = { sort: { createdAt: -1 } }
 
-            const cursor = parcelCollections.find(query,options);
+            const cursor = parcelCollections.find(query, options);
             const result = await cursor.toArray();
             res.send(result)
         })
@@ -53,11 +63,41 @@ async function run() {
             res.send(result)
         })
 
-        app.delete('/parcels/:id', async(req,res) => {
+        app.delete('/parcels/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const result = await parcelCollections.deleteOne(query);
             res.send(result)
+        })
+
+        // Payment related API 
+        app.post('/create-checkout-session', async (req, res) => {
+            const paymentInfo = req.body;
+            const amount = parseInt(paymentInfo.cost) *100;
+            const session = await stripe.checkout.sessions.create({
+                line_items: [
+                    {
+                        // Provide the exact Price ID (for example, price_1234) of the product you want to sell
+                        price_data : {
+                            currency:'USD',
+                            unit_amount : amount,
+                            product_data: {
+                                name: paymentInfo.parcelName,
+                            }
+                        },
+                        quantity: 1,
+                    },
+                ],
+                customer_email: paymentInfo.senderEmail,
+                mode: 'payment',
+                metadata: {
+                    parcelId: paymentInfo.parcelId,
+                },
+                success_url: `${process.env.HOST_DOMAIN}/dashboard/payment-success`,
+                cancel_url: `${process.env.HOST_DOMAIN}/dashboard/payment-cancelled`,
+            })
+            console.log(session)
+            res.send({url: session.url});
         })
 
 
