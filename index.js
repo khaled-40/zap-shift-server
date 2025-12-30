@@ -9,6 +9,15 @@ const app = express()
 const port = process.env.port || 3000;
 const crypto = require("crypto");
 
+var admin = require("firebase-admin");
+
+var serviceAccount = require("./zap-shift-d9d89-firebase-adminsdk-fbsvc-2bc8acd007.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+});
+
+
 function generateTrackingId() {
     const prefix = "PRCL"; // your brand prefix
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
@@ -21,6 +30,24 @@ function generateTrackingId() {
 // middleware
 app.use(cors())
 app.use(express.json())
+
+const verifyFBToken = async (req, res, next) => {
+    console.log(req.headers.authorization);
+    const token = req.headers.authorization;
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+
+    try {
+        const idToken = token.split(' ')[1];
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        console.log('after decoded', decoded)
+        req.decoded_email = decoded.email;
+        next()
+    } catch (err) {
+        res.status(401).send({ message: 'unauthorized access' });
+    }
+}
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.uk3n3pp.mongodb.net/?appName=Cluster0`;
 
@@ -81,11 +108,16 @@ async function run() {
         })
 
         // Payment related API 
-        app.get('/payments', async(req,res) => {
+        app.get('/payments', verifyFBToken, async (req, res) => {
             const email = req.query.email;
+
+            console.log(req.headers)
             const query = {};
-            if(email){
-                query.customerEmail = email
+            if (email) {
+                query.customerEmail = email;
+                if(email !== req.decoded_email) {
+                    return res.status(403).send({message: 'forbidden access'})
+                }
             }
             const cursor = paymentCollections.find(query);
             const result = await cursor.toArray();
@@ -129,14 +161,15 @@ async function run() {
             const transactionId = session.payment_intent;
 
 
-            const query = {transactionId: transactionId};
+            const query = { transactionId: transactionId };
             const paymentExist = await paymentCollections.findOne(query);
 
-            if(paymentExist) {
+            if (paymentExist) {
 
-                return res.send({message: 'payment has already been processed',
-                     transactionId: transactionId,
-                     trackingId: paymentExist.trackingId
+                return res.send({
+                    message: 'payment has already been processed',
+                    transactionId: transactionId,
+                    trackingId: paymentExist.trackingId
                 })
             }
 
@@ -167,9 +200,9 @@ async function run() {
                     const resultPayment = await paymentCollections.insertOne(payment);
                     res.send({
                         success: true,
-                         modifyParcel: result,
-                         trackingId: trackingId,
-                         transactionId: session.payment_intent,
+                        modifyParcel: result,
+                        trackingId: trackingId,
+                        transactionId: session.payment_intent,
                         paymentInfo: resultPayment
                     })
                 }
