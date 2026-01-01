@@ -72,10 +72,35 @@ async function run() {
 
 
         // Rider related API 
+
+        app.patch('/riders/:id', async(req,res) => {
+            const status = req.body.status;
+            const id = req.params.id;
+            const query = {_id: new ObjectId(id)};
+            const updateDoc = {
+                $set: {
+                    status: status
+                }
+            }
+            const result = await riderCollections.updateOne(query, updateDoc);
+            res.send(result)
+        })
+
+
+        app.get('/riders', async(req,res) => {
+            const query = {};
+            if(req.query.status) {
+                query.status = req.query.status
+            }
+            const cursor = riderCollections.find(query);
+            const result = await cursor.toArray();
+            res.send(result);
+        })
+
         app.post('/riders', async(req,res) => {
             const rider = req.body;
             console.log(rider);
-            rider.role = 'rider';
+            rider.status = 'pending';
             rider.appliedAt = new Date();
 
             // const email = rider.email;
