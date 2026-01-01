@@ -41,7 +41,7 @@ const verifyFBToken = async (req, res, next) => {
     try {
         const idToken = token.split(' ')[1];
         const decoded = await admin.auth().verifyIdToken(idToken);
-        console.log('after decoded', decoded)
+        // console.log('after decoded', decoded)
         req.decoded_email = decoded.email;
         next()
     } catch (err) {
@@ -67,11 +67,51 @@ async function run() {
         const db = client.db('zap_shift_db');
         const parcelCollections = db.collection('parcels');
         const paymentCollections = db.collection('payments');
+        const userCollections = db.collection('users');
+        const riderCollections = db.collection('riders');
 
-        // app.get('/parcels' async (req, res) => {
 
-        // })
+        // Rider related API 
+        app.post('/riders', async(req,res) => {
+            const rider = req.body;
+            console.log(rider);
+            rider.role = 'rider';
+            rider.appliedAt = new Date();
 
+            // const email = rider.email;
+
+            // const riderExist = await riderCollections.findOne({email})
+            // if(riderExist) {
+            //     return res.send({message: 'rider already exist'})
+            // }
+
+            const result = await riderCollections.insertOne(rider)
+            res.send(result)
+
+        })
+
+
+        // User related API 
+        app.post('/user', async(req,res) => {
+            const user = req.body;
+            console.log(user)
+            user.role = 'user';
+            user.createAt = new Date();
+
+            const email = req.body.email;
+            
+            const userExist =await userCollections.findOne({email})
+
+            if(userExist) {
+                return res.send({message: 'user exists'})
+            }
+
+            const result = await userCollections.insertOne(user);
+            res.send(result)
+        })
+
+        
+        // Parcel related API 
         app.get('/parcels/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
@@ -119,7 +159,7 @@ async function run() {
                     return res.status(403).send({message: 'forbidden access'})
                 }
             }
-            const cursor = paymentCollections.find(query);
+            const cursor = paymentCollections.find(query).sort({paidAt: -1});
             const result = await cursor.toArray();
             res.send(result)
         })
