@@ -70,11 +70,22 @@ async function run() {
         const userCollections = db.collection('users');
         const riderCollections = db.collection('riders');
 
+        // middleware with database access
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded_email;
+            const query = {email};
+            const user = await userCollections.findOne(query);
+            if(!user || user.role !=='admin') {
+                return res.status(403).send({message: 'forbidden access'})
+            }
+            next();
+        }
+
 
         // Rider related API 
-        app.get('/riders/:id', async(req,res) => {
+        app.get('/riders/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const result = await riderCollections.findOne(query);
             res.send(result)
         })
@@ -95,7 +106,7 @@ async function run() {
                 const useQuery = { email };
                 const updateUserRole = {
                     $set: {
-                        role:'rider'
+                        role: 'rider'
                     }
                 };
                 const userResult = await userCollections.updateOne(useQuery, updateUserRole)
@@ -136,7 +147,7 @@ async function run() {
 
         // User related API 
 
-        app.get('/user',verifyFBToken, async(req, res) => {
+        app.get('/user', verifyFBToken, async (req, res) => {
             const cursor = userCollections.find();
             const result = await cursor.toArray();
             res.send(result)
@@ -160,10 +171,10 @@ async function run() {
             res.send(result)
         })
 
-        app.patch('/user/:id', async(req,res) => {
+        app.patch('/user/:id', verifyFBToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const roleInfo = req.body;
-            const query ={_id : new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const updateUserRole = {
                 $set: {
                     role: roleInfo.role
@@ -171,6 +182,14 @@ async function run() {
             };
             const result = await userCollections.updateOne(query, updateUserRole);
             res.send(result)
+        })
+
+        app.get('/user/:email/role', async (req, res) => {
+            const email = req.params.email;
+            console.log(email);
+            const query = { email };
+            const user = await userCollections.findOne(query);
+            res.send({ role: user?.role || 'user' });
         })
 
         // Parcel related API 
