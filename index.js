@@ -160,6 +160,18 @@ async function run() {
             res.send(result)
         })
 
+        app.patch('/user/:id', async(req,res) => {
+            const id = req.params.id;
+            const roleInfo = req.body;
+            const query ={_id : new ObjectId(id)};
+            const updateUserRole = {
+                $set: {
+                    role: roleInfo.role
+                }
+            };
+            const result = await userCollections.updateOne(query, updateUserRole);
+            res.send(result)
+        })
 
         // Parcel related API 
         app.get('/parcels/:id', async (req, res) => {
