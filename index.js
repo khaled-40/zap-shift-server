@@ -72,24 +72,42 @@ async function run() {
 
 
         // Rider related API 
-
-        app.patch('/riders/:id', async(req,res) => {
-            const status = req.body.status;
+        app.get('/riders/:id', async(req,res) => {
             const id = req.params.id;
             const query = {_id: new ObjectId(id)};
+            const result = await riderCollections.findOne(query);
+            res.send(result)
+        })
+
+        app.patch('/riders/:id', async (req, res) => {
+            const status = req.body.status;
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
             const updateDoc = {
                 $set: {
                     status: status
                 }
             }
             const result = await riderCollections.updateOne(query, updateDoc);
+
+            if (status === 'approved') {
+                const email = req.body.email;
+                const useQuery = { email };
+                const updateUserRole = {
+                    $set: {
+                        role:'rider'
+                    }
+                };
+                const userResult = await userCollections.updateOne(useQuery, updateUserRole)
+            }
+
             res.send(result)
         })
 
 
-        app.get('/riders', async(req,res) => {
+        app.get('/riders', async (req, res) => {
             const query = {};
-            if(req.query.status) {
+            if (req.query.status) {
                 query.status = req.query.status
             }
             const cursor = riderCollections.find(query);
@@ -97,7 +115,7 @@ async function run() {
             res.send(result);
         })
 
-        app.post('/riders', async(req,res) => {
+        app.post('/riders', async (req, res) => {
             const rider = req.body;
             console.log(rider);
             rider.status = 'pending';
@@ -117,25 +135,32 @@ async function run() {
 
 
         // User related API 
-        app.post('/user', async(req,res) => {
+
+        app.get('/user',verifyFBToken, async(req, res) => {
+            const cursor = userCollections.find();
+            const result = await cursor.toArray();
+            res.send(result)
+        })
+
+        app.post('/user', async (req, res) => {
             const user = req.body;
             console.log(user)
             user.role = 'user';
             user.createAt = new Date();
 
             const email = req.body.email;
-            
-            const userExist =await userCollections.findOne({email})
 
-            if(userExist) {
-                return res.send({message: 'user exists'})
+            const userExist = await userCollections.findOne({ email })
+
+            if (userExist) {
+                return res.send({ message: 'user exists' })
             }
 
             const result = await userCollections.insertOne(user);
             res.send(result)
         })
 
-        
+
         // Parcel related API 
         app.get('/parcels/:id', async (req, res) => {
             const id = req.params.id;
@@ -180,11 +205,11 @@ async function run() {
             const query = {};
             if (email) {
                 query.customerEmail = email;
-                if(email !== req.decoded_email) {
-                    return res.status(403).send({message: 'forbidden access'})
+                if (email !== req.decoded_email) {
+                    return res.status(403).send({ message: 'forbidden access' })
                 }
             }
-            const cursor = paymentCollections.find(query).sort({paidAt: -1});
+            const cursor = paymentCollections.find(query).sort({ paidAt: -1 });
             const result = await cursor.toArray();
             res.send(result)
         })
