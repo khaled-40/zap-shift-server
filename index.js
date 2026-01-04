@@ -73,10 +73,10 @@ async function run() {
         // middleware with database access
         const verifyAdmin = async (req, res, next) => {
             const email = req.decoded_email;
-            const query = {email};
+            const query = { email };
             const user = await userCollections.findOne(query);
-            if(!user || user.role !=='admin') {
-                return res.status(403).send({message: 'forbidden access'})
+            if (!user || user.role !== 'admin') {
+                return res.status(403).send({ message: 'forbidden access' })
             }
             next();
         }
@@ -90,13 +90,18 @@ async function run() {
             res.send(result)
         })
 
-        app.patch('/riders/:id', async (req, res) => {
+        app.patch('/riders/:id', verifyFBToken, verifyAdmin, async (req, res) => {
             const status = req.body.status;
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
+            let workStatus = '';
+            if(status === 'approved') {
+                workStatus = 'available'
+            }
             const updateDoc = {
                 $set: {
-                    status: status
+                    status: status,
+                    workStatus: workStatus
                 }
             }
             const result = await riderCollections.updateOne(query, updateDoc);
@@ -106,7 +111,8 @@ async function run() {
                 const useQuery = { email };
                 const updateUserRole = {
                     $set: {
-                        role: 'rider'
+                        role: 'rider',
+                        
                     }
                 };
                 const userResult = await userCollections.updateOne(useQuery, updateUserRole)
@@ -117,9 +123,17 @@ async function run() {
 
 
         app.get('/riders', async (req, res) => {
+            const {status, district, workStatus} = req.query;
+            console.log(district,status,workStatus)
             const query = {};
-            if (req.query.status) {
-                query.status = req.query.status
+            if (status) {
+                query.status = status
+            }
+            if(district) {
+                query.riderDistrict = district
+            }
+            if(workStatus) {
+                query.workStatus = workStatus
             }
             const cursor = riderCollections.find(query);
             const result = await cursor.toArray();
@@ -202,11 +216,14 @@ async function run() {
 
         app.get('/parcels', async (req, res) => {
             const query = {};
-            const { email } = req.query;
+            const { email, deliveryStatus } = req.query;
             if (email) {
                 query.senderEmail = email
             }
 
+            if (deliveryStatus) {
+                query.deliveryStatus = deliveryStatus
+            }
             const options = { sort: { createdAt: -1 } }
 
             const cursor = parcelCollections.find(query, options);
@@ -301,6 +318,7 @@ async function run() {
                 const update = {
                     $set: {
                         paymentStatus: 'paid',
+                        deliveryStatus: 'pending-pickup',
                         trackingId: trackingId
                     }
                 }
