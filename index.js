@@ -214,6 +214,31 @@ async function run() {
             res.send(result)
         })
 
+        app.patch('/parcels/:id', async(req,res) => {
+            const id = req.params.id;
+            const {riderEmail, riderName, riderId} = req.body;
+            const query = {_id: new ObjectId(id)};
+            const updateParcel = {
+                $set: {
+                    riderId: riderId,
+                    riderName: riderName,
+                    riderEmail: riderEmail,
+                    deliveryStatus: 'driver_assigned'
+                }
+            }
+            const parcelResult = await parcelCollections.updateOne(query, updateParcel);
+            
+            // Update Rider Information
+            const riderQuery = {_id: new ObjectId(riderId)};
+            const updateRiderDoc = {
+                $set: {
+                    workStatus: 'in_transit'
+                }
+            };
+            const riderResult = await riderCollections.updateOne(riderQuery, updateRiderDoc);
+            res.send(riderResult)
+        })
+
         app.get('/parcels', async (req, res) => {
             const query = {};
             const { email, deliveryStatus } = req.query;
