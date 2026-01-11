@@ -215,7 +215,7 @@ async function run() {
                 query.riderEmail = email
             }
             if (deliveryStatus) {
-                query.deliveryStatus = deliveryStatus
+                query.deliveryStatus = { $nin: ['delivered'] };
             }
             console.log(query)
             const cursor = parcelCollections.find(query);
@@ -229,6 +229,20 @@ async function run() {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) };
             const result = await parcelCollections.findOne(query);
+            res.send(result)
+        })
+
+        app.patch('/parcels/:id/status', async (req, res) => {
+            const id = req.params.id;
+            const { deliveryStatus } = req.body;
+            // console.log(id, deliveryStatus)
+            const query = { _id: new ObjectId(id) };
+            const updatedStatus = {
+                $set: {
+                    deliveryStatus: deliveryStatus
+                }
+            }
+            const result = await parcelCollections.updateOne(query, updatedStatus);
             res.send(result)
         })
 
