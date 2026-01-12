@@ -93,6 +93,17 @@ async function run() {
             return result;
         }
 
+        // Tracking realted API
+        app.get('/trackings/:trackignId/log', async(req,res) => {
+            const trackingId = req.params.trackignId;
+            console.log(trackingId)
+            const query = {trackingId};
+            const cursor = trackingsCollection.find(query);
+            const result = await cursor.toArray();
+            console.log(result)
+            res.send(result)
+        })
+
         // Rider related API 
         app.get('/riders/:id', async (req, res) => {
             const id = req.params.id;
