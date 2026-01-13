@@ -12,6 +12,7 @@ const crypto = require("crypto");
 var admin = require("firebase-admin");
 
 var serviceAccount = require("./zap-shift-d9d89-firebase-adminsdk-fbsvc-2bc8acd007.json");
+const { count } = require('console');
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
@@ -82,6 +83,17 @@ async function run() {
             next();
         }
 
+
+        const verifyRider = async (req, res, next) => {
+            const email = req.decoded_email;
+            const query = { email };
+            const user = await userCollections.findOne(query);
+            if (!user || user.role !== 'rider') {
+                return res.status(403).send({ message: 'forbidden access' })
+            }
+            next();
+        }
+
         const logTracking = async (trackingId, status) => {
             const log = {
                 trackingId,
@@ -94,10 +106,10 @@ async function run() {
         }
 
         // Tracking realted API
-        app.get('/trackings/:trackignId/log', async(req,res) => {
+        app.get('/trackings/:trackignId/log', async (req, res) => {
             const trackingId = req.params.trackignId;
             console.log(trackingId)
-            const query = {trackingId};
+            const query = { trackingId };
             const cursor = trackingsCollection.find(query);
             const result = await cursor.toArray();
             console.log(result)
@@ -257,6 +269,19 @@ async function run() {
             res.send(result)
         })
 
+        app.get('/parcels/delivery-status/stats', async (req, res) => {
+            const pipeline = [
+                {
+                    $group: {
+                        _id: '$deliveryStatus',
+                        count: { $sum: 1 }
+                    }
+                }
+            ];
+            const result = await parcelCollections.aggregate(pipeline).toArray();
+            res.send(result)
+        })
+
         app.patch('/parcels/:id/status', async (req, res) => {
             const id = req.params.id;
             const { deliveryStatus, riderId, trackingId } = req.body;
@@ -343,7 +368,10 @@ async function run() {
 
         app.post('/parcels', async (req, res) => {
             const parcel = req.body;
+            const trackingId = generateTrackingId();
             parcel.createdAt = new Date();
+            parcel.trackingId = trackingId;
+            logTracking(trackingId, 'parcel_created')
             const result = await parcelCollections.insertOne(parcel);
             res.send(result)
         })
@@ -393,6 +421,7 @@ async function run() {
                 metadata: {
                     parcelId: paymentInfo.parcelId,
                     parcelName: paymentInfo.parcelName,
+                    trackingId: paymentInfo.trackingId
                 },
                 success_url: `${process.env.HOST_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
                 cancel_url: `${process.env.HOST_DOMAIN}/dashboard/payment-cancelled`,
@@ -424,7 +453,7 @@ async function run() {
             if (session.payment_status === 'paid') {
                 const id = session.metadata.parcelId;
                 const query = { _id: new ObjectId(id) };
-                const trackingId = generateTrackingId();
+                const trackingId = session.metadata.trackingId;
                 const update = {
                     $set: {
                         paymentStatus: 'paid',
@@ -445,17 +474,17 @@ async function run() {
                     trackingId: trackingId
                 }
 
-                if (session.payment_status === 'paid') {
-                    const resultPayment = await paymentCollections.insertOne(payment);
-                    logTracking(trackingId, 'pending_pickup')
-                    res.send({
-                        success: true,
-                        modifyParcel: result,
-                        trackingId: trackingId,
-                        transactionId: session.payment_intent,
-                        paymentInfo: resultPayment
-                    })
-                }
+
+                const resultPayment = await paymentCollections.insertOne(payment);
+                logTracking(trackingId, 'pending_pickup')
+                return res.send({
+                    success: true,
+                    modifyParcel: result,
+                    trackingId: trackingId,
+                    transactionId: session.payment_intent,
+                    paymentInfo: resultPayment
+                })
+
             }
             res.send({ success: false })
         })
