@@ -155,6 +155,55 @@ async function run() {
             res.send(result)
         })
 
+        app.get('/rider/delivery-per-day', async (req, res) => {
+            const email = req.query.email;
+            const pipeline = [
+                {
+                    $match: {
+                        riderEmail: email,
+                        deliveryStatus: 'delivered'
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'trackings',
+                        localField: 'trackingId',
+                        foreignField: 'trackingId',
+                        as: 'parcel_tracking'
+                    }
+                },
+                {
+                    $unwind: '$parcel_tracking'
+                },
+                {
+                    $match: {
+                        "parcel_tracking.status": "delivered"
+                    }
+                },
+                // 5. Extract delivery day (critical step you were missing)
+                {
+                    $addFields: {
+                        deliveryDay: {
+                            $dateToString: {
+                                format: '%Y-%m-%d',
+                                date: '$parcel_tracking.createdAt'
+                            }
+                        }
+                    }
+                },
+
+                // 6. Group by day and count deliveries
+                {
+                    $group: {
+                        _id: '$deliveryDay',
+                        totalDelivered: { $sum: 1 }
+                    }
+                },
+            ];
+            const result = await parcelCollections.aggregate(pipeline).toArray();
+            res.send(result);
+        })
+
 
         app.get('/riders', async (req, res) => {
             const { status, district, workStatus } = req.query;
@@ -272,15 +321,31 @@ async function run() {
         app.get('/parcels/delivery-status/stats', async (req, res) => {
             const pipeline = [
                 {
+                    $project: {
+                        deliveryStatus: {
+                            $ifNull: ['$deliveryStatus', 'Empty']
+                        }
+                    }
+                },
+                {
                     $group: {
                         _id: '$deliveryStatus',
                         count: { $sum: 1 }
                     }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        status: '$_id',
+                        count: 1
+                    }
                 }
             ];
+
             const result = await parcelCollections.aggregate(pipeline).toArray();
-            res.send(result)
-        })
+            res.send(result);
+        });
+
 
         app.patch('/parcels/:id/status', async (req, res) => {
             const id = req.params.id;
