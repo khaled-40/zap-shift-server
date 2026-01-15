@@ -1,3 +1,5 @@
 node_modules
 .env
-zap-shift-d9d89-firebase-adminsdk-fbsvc-2bc8acd007.json
+FB_SERVICE_KEY.txt
+zap-shift-d9d89-firebase-adminsdk-fbsvc-b4f6574290.json
+.vercel
